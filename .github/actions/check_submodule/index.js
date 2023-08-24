@@ -15057,11 +15057,16 @@ class Submodule {
             return git.subModule(["set-url", this.path, newRemoteURL]);
         }
     }
-    isModified(git, previousSHA) {
+    updateModified(git, previousSHA) {
         return __awaiter(this, void 0, void 0, function* () {
             const summary = yield git.subModule(["summary", previousSHA, this.path]);
             // If summary is empty, there are no changes
-            return summary.trim() !== "";
+            console.log("Summary length: " + summary.length);
+            const modified = summary.trim().length !== 0;
+            if (modified) {
+                console.log(`${this.path} has been modified`);
+            }
+            this.modified = modified;
         });
     }
 }
@@ -15145,27 +15150,29 @@ function run() {
             let SHA;
             if (baseSHA) {
                 // SHA of the target branch for a PR
-                console.log("Base SHA found");
+                console.log(`Base SHA found: ${baseSHA}`);
                 SHA = baseSHA;
             }
             else if (beforeSHA) {
                 // SHA of commit before push
-                console.log("Before SHA found");
+                console.log(`Before SHA found: ${beforeSHA}`);
                 SHA = beforeSHA;
             }
             else {
                 throw new Error("Neither base or before SHA found");
             }
-            const modifiedSubmodules = yield Promise.all(submodules.filter((submodule) => {
-                submodule.isModified(git, SHA);
-            }));
+            yield Promise.all(submodules.map((submodule) => submodule.updateModified(git, SHA)));
+            const modifiedSubmodules = submodules.filter((submodule) => submodule.modified);
+            console.log(`Modified Submodules:\n\t${modifiedSubmodules.map((submodule) => submodule.path).join("\n\t") ||
+                "None"}`);
             console.log("Initializing submodules...");
             yield Promise.all(modifiedSubmodules.map((submodule) => {
-                return git.submoduleUpdate([...updateArgs, submodule.path]);
+                console.log(`Initializing ${submodule.path}`);
+                git.submoduleUpdate([...updateArgs, submodule.path]);
             }));
         }
         else {
-            console.log("Initializing submodules...");
+            console.log("Initializing all submodules...");
             yield git.submoduleUpdate(updateArgs);
         }
     });
